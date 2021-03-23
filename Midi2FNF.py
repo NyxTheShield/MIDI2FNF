@@ -5,6 +5,7 @@ import random
 from easygui import *
 import os
 import math
+import sys
 
 DEFAULT_TEMPO = 0.5
 
@@ -157,40 +158,76 @@ if __name__ == '__main__':
             errmsg = errmsg + ('"%s" is a required field.\n\n' % fieldNames[i])
         if errmsg == "": break # no problems found
         fieldValues = multenterbox(errmsg, title, fieldNames, fieldValues)
-     
 
-    dicc = dict()
-    dicc["song"] = {}
-    dicc["song"]["player1"] = fieldValues[2]
-    dicc["song"]["player2"] = fieldValues[3]
-    dicc["song"]["notes"] = []
-    dicc["song"]["isHey"] = False
-    dicc["song"]["cutsceneType"] = "none"
-    dicc["song"]["song"]= fieldValues[0]
-    dicc["song"]["isSpooky"]=False
-    dicc["song"]["validScore"]=True
-    dicc["song"]["speed"]=2
-    dicc["song"]["isMoody"]=False
-    dicc["song"]["sectionLengths"]=[]
-    dicc["song"]["uiType"]="normal"
-    dicc["song"]["stage"]=fieldValues[1]
-    dicc["song"]["sections"]=0
-    dicc["song"]["needsVoices"]=True
-    dicc["song"]["bpm"]=bpm
-    dicc["song"]["gf"]="gf"
+    chartFormat = choicebox('Select the Chart Output Format', 'Format', ('Vanilla FNF', 'Kade Engine'))
 
-    for i, notes in enumerate(frames):
-            auxDicc = dict()
-            auxDicc["typeOfSection"]=0
-            auxDicc["lengthInSteps"]=16
-            auxDicc["sectionNotes"]=notes
-            auxDicc["altAnim"]=False
-            auxDicc["mustHitSection"]=True
-            auxDicc["bpm"]=bpm
-            dicc["song"]["notes"]+=[auxDicc]
-    json = json.dumps(dicc)
+    if (chartFormat == "Vanilla FNF"):
+        dicc = dict()
+        dicc["song"] = {}
+        dicc["song"]["song"]= fieldValues[0]
+        dicc["song"]["notes"] = []
+        dicc["song"]["bpm"]=int(bpm)
+        dicc["song"]["sections"]=0
+        dicc["song"]["needsVoices"]=True
+        dicc["song"]["player1"] = fieldValues[2]
+        dicc["song"]["player2"] = fieldValues[3]
+        dicc["song"]["sectionLengths"]=[]
+        dicc["song"]["speed"]=2
+        dicc["song"]["validScore"]=True
+        
+        #dicc["song"]["stage"]=fieldValues[1]
+        dicc["bpm"]=int(bpm)
+        dicc["sections"]=len(frames)
+
+        for i, notes in enumerate(frames):
+                auxDicc = dict()
+                auxDicc["lengthInSteps"]=16
+                auxDicc["bpm"]=int(bpm)
+                auxDicc["changeBPM"]=False
+                auxDicc["mustHitSection"]=True
+                auxDicc["sectionNotes"]=notes
+                auxDicc["typeOfSection"]=0
+                dicc["song"]["notes"]+=[auxDicc]
+
+        dicc["notes"]=dicc["song"]["notes"]
+        
+        json = json.dumps(dicc)
+
+    else:
+        dicc = dict()
+        dicc["song"] = {}
+        dicc["song"]["player1"] = fieldValues[2]
+        dicc["song"]["player2"] = fieldValues[3]
+        dicc["song"]["notes"] = []
+        dicc["song"]["isHey"] = False
+        dicc["song"]["cutsceneType"] = "none"
+        dicc["song"]["song"]= fieldValues[0]
+        dicc["song"]["isSpooky"]=False
+        dicc["song"]["validScore"]=True
+        dicc["song"]["speed"]=2
+        dicc["song"]["isMoody"]=False
+        dicc["song"]["sectionLengths"]=[]
+        dicc["song"]["uiType"]="normal"
+        dicc["song"]["stage"]=fieldValues[1]
+        dicc["song"]["sections"]=0
+        dicc["song"]["needsVoices"]=True
+        dicc["song"]["bpm"]=bpm
+        dicc["song"]["gf"]="gf"
+
+        for i, notes in enumerate(frames):
+                auxDicc = dict()
+                auxDicc["typeOfSection"]=0
+                auxDicc["lengthInSteps"]=16
+                auxDicc["sectionNotes"]=notes
+                auxDicc["altAnim"]=False
+                auxDicc["mustHitSection"]=True
+                auxDicc["bpm"]=bpm
+                dicc["song"]["notes"]+=[auxDicc]
+        json = json.dumps(dicc)
 
     out = filesavebox(default=filename+'.json')
     with open(out,"w") as file:
         file.write(json)
-        
+
+
+sys.exit()
