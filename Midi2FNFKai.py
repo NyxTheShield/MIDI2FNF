@@ -154,6 +154,17 @@ if __name__ == '__main__':
     tick_duration = 60/(mid.ticks_per_beat*bpm)
     print("Tick Duration:")
     print(tick_duration)
+    msec_per_beat = 60 / bpm * 1000 
+    msec_per_step = 60 / bpm * 1000 / 4
+    
+    noteState = {}
+    def getNoteState(note):
+        if str(note) in noteState:
+            return noteState[str(note)]
+        else:
+            noteState[str(note)] = [0,0,0]
+            print("error!")
+            return noteState[str(note)]
 
     print("Tempo:" + str(DEFAULT_TEMPO))
     for i, track in enumerate(mid.tracks):
@@ -162,6 +173,7 @@ if __name__ == '__main__':
         totaltime = 0
         #print("Track: " + str(i))
         globalTime = 0
+
         for message in track:
             t = ticks2s(message.time, tempo, mid.ticks_per_beat)
             totaltime += t
@@ -178,6 +190,7 @@ if __name__ == '__main__':
                 
                 globalTime+= message.time
                 if (message.type == "note_on"):
+                    
                     currTime = globalTime*tick_duration*1000
                     noteToUse = 0
                     if (message.channel == 0):
@@ -189,11 +202,23 @@ if __name__ == '__main__':
                         else: 
                             noteToUse = 0 #random.choice([0,1,2,3])
                             
-                        print(message, "-> ", noteToUse)
-
                     aux = [currTime,noteToUse,0] #TODO: long notes
                     #print(aux)
                     nyxTracks[message.channel] += [aux]
+                    noteState[str(message.note)] = len(nyxTracks[message.channel])-1
+                
+                elif (message.type == "note_off"):
+                    target_auxid = getNoteState(message.note)
+                    lastaux = nyxTracks[message.channel][target_auxid]
+                    currTime = globalTime*tick_duration*1000 - 5
+                    lastaux[2] = currTime - lastaux[0]
+                    if msec_per_step > lastaux[2]:
+                        lastaux[2] = 0
+                    #nyxTracks[message.channel] += [lastaux]
+                    nyxTracks[message.channel][target_auxid][2] = lastaux[2]
+                    del noteState[str(message.note)]
+
+                    print(message, "| long:", msec_per_step, lastaux[2])
 
         #print("totaltime: " + str(totaltime)+"s")
 
@@ -222,9 +247,9 @@ if __name__ == '__main__':
         
         frames+=[aux]
 
-        print("Notes on this frame:")
-        for x in aux:
-            print(x)
+        #print("Notes on this frame:")
+        #for x in aux:
+        #    print(x)
         
         currTime += 240/bpm
 
