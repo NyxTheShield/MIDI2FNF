@@ -1,0 +1,1 @@
+pyinstaller Midi2FNFKai.py  --onefile
