@@ -11,6 +11,17 @@ import sys
 
 DEFAULT_TEMPO = 0.5
 
+def loadconfig():
+    try:
+        with open("config.json", "r") as f:
+            dat = json.load(f)
+    except:
+        dat = {}
+        
+    return dat
+CONF = loadconfig()
+
+
 def ticks2s(ticks, tempo, ticks_per_beat):
     """
         Converts ticks to seconds
@@ -199,22 +210,23 @@ if __name__ == '__main__':
                             noteToUse = message.note-60
                         elif (message.note >= 72 and message.note <= 83):
                             noteToUse = message.note-72+4   
-                        else: 
+                        else:
                             noteToUse = 0 #random.choice([0,1,2,3])
                             
-                    aux = [currTime,noteToUse,0] #TODO: long notes
+                    aux = [currTime,noteToUse,0] 
                     #print(aux)
                     nyxTracks[message.channel] += [aux]
                     noteState[str(message.note)] = len(nyxTracks[message.channel])-1
                 
                 elif (message.type == "note_off"):
+                    # long notes detection
+
                     target_auxid = getNoteState(message.note)
                     lastaux = nyxTracks[message.channel][target_auxid]
                     currTime = globalTime*tick_duration*1000 - 5
                     lastaux[2] = currTime - lastaux[0]
                     if msec_per_step > lastaux[2]:
                         lastaux[2] = 0
-                    #nyxTracks[message.channel] += [lastaux]
                     nyxTracks[message.channel][target_auxid][2] = lastaux[2]
                     del noteState[str(message.note)]
 
