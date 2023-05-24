@@ -8,16 +8,23 @@ import os
 import math
 import sys
 
-
 DEFAULT_TEMPO = 0.5
+CONFIG_FILE = "config.json"
+DEFAULT_CONFIG ={
+                "section_keyswitch": [{"note": 85, "set_attr": "mustHitSection", "1": True, "0": False }],
+                "mustHitSectionNote": 85,
+               "chartFormat": "Kade Engine", 
+               "midi2fnf key_count": 4} 
 
 def loadconfig():
     try:
-        with open("config.json", "r") as f:
+        with open(CONFIG_FILE, "r") as f:
             dat = json.load(f)
     except:
-        dat = {}
-        
+        # default config file
+        dat = DEFAULT_CONFIG
+        with open(CONFIG_FILE, "w") as f:
+            f.write(json.dumps(dat, indent=4))
     return dat
 CONF = loadconfig()
 
@@ -50,7 +57,7 @@ def round_decimals_up(number:float, decimals:int=2):
     factor = 10 ** decimals
     return math.ceil(number * factor) / factor
 
-# for Drag&Drop
+# for Drag&Drop or FileDialog
 path = ""
 if len(sys.argv) > 1:
     path = sys.argv[1]
@@ -63,10 +70,11 @@ fileext = os.path.splitext(bname)[1]
 filename = os.path.splitext(bname)[0]
 songName = filename
 
-print(fileext)
+print("processing: ", fileext)
 
 if __name__ == '__main__':
-    if ".json" == fileext: # fnfjson 2 midi
+     # fnf 2 midi---------------------------------------
+    if ".json" == fileext:
         # JSONファイルの読み込みと辞書への変換
         with open(path, "r") as file:
             dat = json.load(file)["song"]
@@ -90,11 +98,18 @@ if __name__ == '__main__':
         track[0].append( MetaMessage('set_tempo', tempo=mido.bpm2tempo(bpm)))
         track[1].append( MetaMessage('set_tempo', tempo=mido.bpm2tempo(bpm)))
 
+        section_step =  240/bpm* 1000
+        currTime = 0
         for section in notes:
             mustHit = False
             if "mustHitSection" in section:
+                print("mustHitSection", section["mustHitSection"])
                 if section["mustHitSection"] == "true" or section["mustHitSection"] == True:
                     mustHit = True
+                    track[1].append(mido.Message('note_on', note=CONF["mustHitSectionNote"], time=int(round(currTime*10000,0)))) # for rounding error *10000
+                    track[1].append(mido.Message('note_off', note=CONF["mustHitSectionNote"], time=int(round((currTime+section_step-10)*10000,0))))
+
+            currTime += section_step
 
             for sn in section["sectionNotes"]:
                 note_time = sn[0]
@@ -103,8 +118,8 @@ if __name__ == '__main__':
                 note_ch = 0
                 if sn[1] >= key_count:
                     note_ch = 1
-                if mustHit == True: # musthit : reverse channel
-                    note_ch = 0 if note_ch == 1 else 1
+                if mustHit == True: # musthit 
+                    note_ch = 0 if note_ch == 1 else 1 # reverse
 
                 # channel to midi_note
                 snt = sn[1]
@@ -140,8 +155,10 @@ if __name__ == '__main__':
         mid.save(songName+".mid")
         sys.exit()
 
-    # midi 2 fnfjson
+
+    # midi 2 fnf------------------------------------------------------------
     bpm = float(enterbox("BPM of Midi", "Enter BPM", 120))
+    key_count = CONF["midi2fnf key_count"]
 
     nyxTracks = dict()
     for i in range(16):
@@ -204,15 +221,16 @@ if __name__ == '__main__':
                     
                     currTime = globalTime*tick_duration*1000
                     noteToUse = 0
-                    if (message.channel == 0):
+                    if (message.channel == 0): #only use channel 0
                         print(message, "-> ", noteToUse)
                         if (message.note >= 60 and message.note <= 71):
                             noteToUse = message.note-60
                         elif (message.note >= 72 and message.note <= 83):
-                            noteToUse = message.note-72+4   
+                            noteToUse = message.note-72 + key_count
                         else:
-                            noteToUse = 0 #random.choice([0,1,2,3])
-                            
+                            # special command
+                            noteToUse = message.note 
+                                
                     aux = [currTime,noteToUse,0] 
                     #print(aux)
                     nyxTracks[message.channel] += [aux]
@@ -232,36 +250,52 @@ if __name__ == '__main__':
 
                     print(message, "| long:", msec_per_step, lastaux[2])
 
-        #print("totaltime: " + str(totaltime)+"s")
+        print("totaltime: " + str(totaltime)+"s")
+
 
     frames = []
+    section_settings = []
     currTime = 240/bpm
     tolerance = (240/bpm)/32;
     while currTime < totaltime:
         #print("FRAME!!" + str(currTime))
         aux = []
-        for note in list(nyxTracks[0]):
-            roundedNote = round_decimals_up(note[0],3)
-            if roundedNote + tolerance < currTime*1000:
-                #print("track0")
-                #print(note)
-                aux+=[ [roundedNote ,note[1],note[2]] ]
-                nyxTracks[0].remove(note)
-                
-        for note in list(nyxTracks[1]):
-            roundedNote = round_decimals_up(note[0],3)
-            if roundedNote + tolerance < currTime*1000:
-                #print("track0")
-                #print(note)
-                aux+=[ [roundedNote ,note[1],note[2]] ]
-                nyxTracks[1].remove(note)
+        section_special_command = {}
+        for i, v in enumerate(CONF["section_keyswitch"]):
+            section_special_command[v["set_attr"]] =  v["0"]
 
-        
+        for j in range(2):
+            for note in list(nyxTracks[j]):
+                roundedNote = round_decimals_up(note[0],3)
+                if roundedNote + tolerance < currTime*1000:
+                    # check special command
+                    special_f = False
+                    for i, v in enumerate(CONF["section_keyswitch"]):
+                        if note[1] == v["note"]:
+                            print(f"FRAME:{str(currTime)} {v['set_attr']} : {v['1']}")
+                            special_f = True
+                            section_special_command[v["set_attr"]] =  v["1"]
+                    if (special_f == False) and (note[1] > key_count*2):
+                         print(f"{roundedNote} wrong note:{note[1]}")
+                         special_f = True
+
+                    # normal notes
+                    if special_f == False:
+                        aux+=[ [roundedNote,note[1],note[2]] ]
+                    nyxTracks[j].remove(note)
+                    
+            #for note in list(nyxTracks[1]):
+            #    roundedNote = round_decimals_up(note[0],3)
+            #    if roundedNote + tolerance < currTime*1000:
+            #        aux+=[ [roundedNote ,note[1],note[2]] ]
+            #        nyxTracks[1].remove(note)
+
         frames+=[aux]
+        section_settings.append(section_special_command)
 
-        #print("Notes on this frame:")
-        #for x in aux:
-        #    print(x)
+        print("Notes on this frame:")
+        for x in aux:
+            print(x)
         
         currTime += 240/bpm
 
@@ -281,8 +315,16 @@ if __name__ == '__main__':
         if errmsg == "": break # no problems found
         fieldValues = multenterbox(errmsg, title, fieldNames, fieldValues)
 
-    #chartFormat = choicebox('Select the Chart Output Format', 'Format', ('Vanilla FNF', 'Kade Engine'))
-    chartFormat = "Kade Engine"
+    def convertMustHit(mustHit, in_notes):
+        if mustHit:
+            for i, v in enumerate(in_notes):
+                if in_notes[i][1] >= key_count:
+                    in_notes[i][1] =in_notes[i][1] - key_count
+                else:
+                    in_notes[i][1] = in_notes[i][1] + key_count
+        return in_notes
+
+    chartFormat = CONF["chartFormat"]
 
     if (chartFormat == "Vanilla FNF"):
         dicc = dict()
@@ -308,8 +350,10 @@ if __name__ == '__main__':
                 auxDicc["bpm"]=int(bpm)
                 auxDicc["changeBPM"]=False
                 auxDicc["mustHitSection"]=True
-                auxDicc["sectionNotes"]=notes
+                auxDicc["sectionNotes"]= convertMustHit(section_settings[i]["mustHitSection"], notes)
                 auxDicc["typeOfSection"]=0
+                for k, v in section_settings[i].items():
+                    auxDicc[k] = v
                 dicc["song"]["notes"]+=[auxDicc]
 
         dicc["notes"]=dicc["song"]["notes"]
@@ -341,16 +385,18 @@ if __name__ == '__main__':
                 auxDicc = dict()
                 auxDicc["typeOfSection"]=0
                 auxDicc["lengthInSteps"]=16
-                auxDicc["sectionNotes"]=notes
+                auxDicc["sectionNotes"]= convertMustHit(section_settings[i]["mustHitSection"], notes)
                 auxDicc["altAnim"]=False
                 auxDicc["mustHitSection"]=True
                 auxDicc["bpm"]=bpm
+                for k, v in section_settings[i].items():
+                    auxDicc[k] = v
+
                 dicc["song"]["notes"]+=[auxDicc]
         json = json.dumps(dicc)
 
     out = filesavebox(default=filename+'.json')
     with open(out,"w") as file:
         file.write(json)
-
 
 sys.exit()
